@@ -29,6 +29,48 @@ func SetHttpServerMode(runMode string) {
 	}
 }
 
+func StartHttpServerTLS(ctx context.Context, router *gin.Engine, httpPort int, certFile, keyFile string) {
+	server := &http.Server{
+		Addr:    fmt.Sprintf(":%d", httpPort),
+		Handler: router,
+	}
+
+	shutdownChan := make(chan os.Signal, 1)
+	signal.Notify(shutdownChan, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		err := server.ListenAndServeTLS(certFile, keyFile)
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			tlog.F(ctx).Err(err).Msgf("start http server (%d) err (%v).",
+				httpPort, err)
+		}
+	}()
+
+	tlog.I(ctx).Msgf("http server started, listen on %d.", httpPort)
+
+	select {
+	case <-ctx.Done():
+		err := server.Shutdown(ctx)
+		if err != nil {
+			tlog.E(ctx).Err(err).Msgf("shutdown http server err (%v).",
+				err)
+
+			return
+		}
+
+		return
+	case <-shutdownChan:
+		err := server.Shutdown(ctx)
+		if err != nil {
+			tlog.E(ctx).Err(err).Msgf("shutdown http server err (%v).",
+				err)
+
+			return
+		}
+		return
+	}
+}
+
 func StartHttpServer(ctx context.Context, router *gin.Engine, httpPort int) {
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", httpPort),
@@ -52,7 +94,7 @@ func StartHttpServer(ctx context.Context, router *gin.Engine, httpPort int) {
 	case <-ctx.Done():
 		err := server.Shutdown(ctx)
 		if err != nil {
-			tlog.E(ctx).Err(err).Msgf("shut down http server err (%v).",
+			tlog.E(ctx).Err(err).Msgf("shutdown http server err (%v).",
 				err)
 
 			return
@@ -62,7 +104,7 @@ func StartHttpServer(ctx context.Context, router *gin.Engine, httpPort int) {
 	case <-shutdownChan:
 		err := server.Shutdown(ctx)
 		if err != nil {
-			tlog.E(ctx).Err(err).Msgf("shut down http server err (%v).",
+			tlog.E(ctx).Err(err).Msgf("shutdown http server err (%v).",
 				err)
 
 			return
