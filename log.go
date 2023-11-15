@@ -18,19 +18,19 @@ import (
 
 func logFormatter(param gin.LogFormatterParams) string {
 	event := tlog.I(param.Request.Context()).
-		Detailf("method: %s; ", param.Method).
-		Detailf("latency: %v;", param.Latency).
-		Detailf("code: %d;", param.StatusCode).
-		Detailf("Path: %s;", param.Path).
-		Detailf("client_ip: %s;", param.ClientIP).
-		Detailf("response_size: %d;", param.BodySize)
+		Detailf("method: %s", param.Method).
+		Detailf("latency: %v", param.Latency).
+		Detailf("code: %d", param.StatusCode).
+		Detailf("Path: %s", param.Path).
+		Detailf("client_ip: %s", param.ClientIP).
+		Detailf("response_size: %d", param.BodySize)
 
 	if len(param.Request.URL.RawQuery) > 0 {
-		event.Detailf("query: %s;", param.Request.URL.RawQuery)
+		event.Detailf("query: %s", param.Request.URL.RawQuery)
 	}
 
 	if len(param.ErrorMessage) > 0 {
-		event.Detailf("error: %s;", param.ErrorMessage)
+		event.Detailf("error: %s", param.ErrorMessage)
 	}
 
 	if (param.Method == http.MethodPost || param.Method == http.MethodPut ||
@@ -42,7 +42,7 @@ func logFormatter(param gin.LogFormatterParams) string {
 			body = []byte("empty")
 		}
 
-		event.Detailf("body: %s;", string(body))
+		event.Detailf("body: %s", string(body))
 	}
 
 	event.Msg("http access log.")
