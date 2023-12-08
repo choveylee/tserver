@@ -21,7 +21,7 @@ func logFormatter(param gin.LogFormatterParams) string {
 		Detailf("method:%s", param.Method).
 		Detailf("latency:%v", param.Latency).
 		Detailf("code:%d", param.StatusCode).
-		Detailf("Path:%s", param.Path).
+		Detailf("path:%s", param.Path).
 		Detailf("client_ip:%s", param.ClientIP).
 		Detailf("response_size:%d", param.BodySize)
 
