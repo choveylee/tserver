@@ -17,7 +17,7 @@ import (
 )
 
 func logFormatter(param gin.LogFormatterParams) string {
-	event := tlog.I(param.Request.Context()).
+	event := tlog.D(param.Request.Context()).
 		Detailf("method:%s", param.Method).
 		Detailf("latency:%v", param.Latency).
 		Detailf("code:%d", param.StatusCode).
