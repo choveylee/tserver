@@ -16,7 +16,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/chenzhuoyu/base64x v0.0.0-20230717121745-296ad89f973d // indirect
 	github.com/chenzhuoyu/iasm v0.9.1 // indirect
-	github.com/choveylee/tcfg v0.0.0-20231115020527-b8bdc45c86eb // indirect
+	github.com/choveylee/tcfg v0.0.0-20231210122623-e0407bbfb272 // indirect
 	github.com/choveylee/terror v0.0.0-20221105132813-997ba58d0bf1 // indirect
 	github.com/choveylee/ttrace v0.0.0-20231210113425-070b459d201c // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
