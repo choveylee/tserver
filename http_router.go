@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/choveylee/tserver/middleware"
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 )
@@ -26,7 +27,7 @@ func NewRouter(serviceName string) *gin.Engine {
 		Output:    io.Discard,
 	}))
 	router.Use(ginMetric())
-	router.Use(reuseMiddleware())
+	router.Use(middleware.ReuseMiddleware())
 
 	// health check
 	router.GET("/healthz", func(c *gin.Context) {
