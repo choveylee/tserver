@@ -3,7 +3,7 @@ module github.com/choveylee/tserver
 go 1.21.6
 
 require (
-	github.com/choveylee/tlimiter v0.0.0-20240228053448-51ad0f9ef32e
+	github.com/choveylee/tlimiter v0.0.0-20240228093320-72af9df67a04
 	github.com/choveylee/tlog v0.0.0-20231210115013-e9da4987a37c
 	github.com/choveylee/tmetric v0.0.0-20231210115317-3278400744b1
 	github.com/gin-gonic/gin v1.9.1

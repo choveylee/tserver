@@ -27,6 +27,8 @@ github.com/choveylee/terror v0.0.0-20231211012536-682afad31629 h1:SO5C0pdu9WPsxq
 github.com/choveylee/terror v0.0.0-20231211012536-682afad31629/go.mod h1:ozrDNSD9LQfb2c4+nzatFV5ijJmJjvlRxyuaBIhd3rg=
 github.com/choveylee/tlimiter v0.0.0-20240228053448-51ad0f9ef32e h1:U4eyY4Jprijot7GYzraxb6DRQ3OAfUabHikGdQFyRa0=
 github.com/choveylee/tlimiter v0.0.0-20240228053448-51ad0f9ef32e/go.mod h1:3J8bhJmZLNH32n/HRRv9mFIcUMP4M31WP4HXSLBoVOk=
+github.com/choveylee/tlimiter v0.0.0-20240228093320-72af9df67a04 h1:tSnv8DW5NPn2/Kq9H1k5DBbQ7ZeEm85S0KhxrcIFSyk=
+github.com/choveylee/tlimiter v0.0.0-20240228093320-72af9df67a04/go.mod h1:3J8bhJmZLNH32n/HRRv9mFIcUMP4M31WP4HXSLBoVOk=
 github.com/choveylee/tlog v0.0.0-20231210115013-e9da4987a37c h1:QHgG24NjqXqUgxm/LAjScoHRk78CHiOAxjphrFUheAU=
 github.com/choveylee/tlog v0.0.0-20231210115013-e9da4987a37c/go.mod h1:DbRyTKIL+JkQ+mQabjU0PgoDEXtoaZPqCB8TcjMfVFM=
 github.com/choveylee/tmetric v0.0.0-20231210115317-3278400744b1 h1:48104PN8yc0rnU8W4DKj1zJGE9c2toZKwiBgbnmNU0E=
