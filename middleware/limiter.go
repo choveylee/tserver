@@ -6,7 +6,7 @@
  * @Date: 2024/02/28 13:35
  */
 
-package middleware
+package tmiddleware
 
 import (
 	"net/http"
@@ -61,7 +61,7 @@ func (config *LimiterConfig) Handle(c *gin.Context) {
 	c.Next()
 }
 
-type LimiterConfigInterface interface {
+type LimiterConfigOptionInterface interface {
 	apply(*LimiterConfig)
 }
 
@@ -75,7 +75,7 @@ func (option LimiterConfigOption) apply(config *LimiterConfig) {
 type ErrorHandler func(c *gin.Context, err error)
 
 // WithErrorHandler will configure the Middleware to use the given ErrorHandler.
-func WithErrorHandler(handler ErrorHandler) LimiterConfigInterface {
+func WithErrorHandler(handler ErrorHandler) LimiterConfigOptionInterface {
 	return LimiterConfigOption(func(config *LimiterConfig) {
 		config.ErrorHandler = handler
 	})
@@ -90,7 +90,7 @@ func DefaultErrorHandler(c *gin.Context, err error) {
 type LimitReachedHandler func(c *gin.Context)
 
 // WithLimitReachedHandler will configure the Middleware to use the given LimitReachedHandler.
-func WithLimitReachedHandler(handler LimitReachedHandler) LimiterConfigInterface {
+func WithLimitReachedHandler(handler LimitReachedHandler) LimiterConfigOptionInterface {
 	return LimiterConfigOption(func(config *LimiterConfig) {
 		config.LimitReachedHandler = handler
 	})
@@ -98,14 +98,14 @@ func WithLimitReachedHandler(handler LimitReachedHandler) LimiterConfigInterface
 
 // DefaultLimitReachedHandler is the default LimitReachedHandler used by a new Middleware.
 func DefaultLimitReachedHandler(c *gin.Context) {
-	c.String(http.StatusTooManyRequests, "Limit exceeded")
+	c.String(http.StatusTooManyRequests, "limit exceeded")
 }
 
 // KeyGetter will define the rate limiter key given the gin Context.
 type KeyGetter func(c *gin.Context) string
 
 // WithKeyGetter will configure the Middleware to use the given KeyGetter.
-func WithKeyGetter(handler KeyGetter) LimiterConfigInterface {
+func WithKeyGetter(handler KeyGetter) LimiterConfigOptionInterface {
 	return LimiterConfigOption(func(config *LimiterConfig) {
 		config.KeyGetter = handler
 	})
@@ -118,13 +118,13 @@ func DefaultKeyGetter(c *gin.Context) string {
 }
 
 // WithExcludedKey will configure the Middleware to ignore key(s) using the given function.
-func WithExcludedKey(handler func(string) bool) LimiterConfigInterface {
+func WithExcludedKey(handler func(string) bool) LimiterConfigOptionInterface {
 	return LimiterConfigOption(func(config *LimiterConfig) {
 		config.ExcludedKey = handler
 	})
 }
 
-func LimiterMiddleware(limiter *tlimiter.Limiter, options ...LimiterConfigOption) gin.HandlerFunc {
+func LimiterMiddleware(limiter *tlimiter.Limiter, options ...LimiterConfigOptionInterface) gin.HandlerFunc {
 	limiterConfig := &LimiterConfig{
 		Limiter: limiter,
 
