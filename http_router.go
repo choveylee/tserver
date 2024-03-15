@@ -27,7 +27,7 @@ func NewRouter(serviceName string) *gin.Engine {
 		Output:    io.Discard,
 	}))
 	router.Use(ginMetric())
-	router.Use(middleware.ReuseMiddleware())
+	router.Use(tmiddleware.ReuseMiddleware())
 
 	// health check
 	router.GET("/healthz", func(c *gin.Context) {
