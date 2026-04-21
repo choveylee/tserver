@@ -1,11 +1,3 @@
-/**
- * @Author: lidonglin
- * @Description:
- * @File:  cors.go
- * @Version: 1.0.0
- * @Date: 2024/02/28 15:52
- */
-
 package tmiddleware
 
 import (
@@ -14,6 +6,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// CorsMiddleware returns middleware that sets broad CORS response headers, allows common methods,
+// and responds to OPTIONS requests with 204 No Content without invoking subsequent handlers.
 func CorsMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Header("Access-Control-Allow-Origin", "*")
@@ -23,9 +17,9 @@ func CorsMiddleware() gin.HandlerFunc {
 		c.Header("Access-Control-Allow-Credentials", "false")
 		c.Header("Access-Control-Max-Age", "172800")
 
-		method := c.Request.Method
-		if method == "OPTIONS" {
+		if c.Request.Method == http.MethodOptions {
 			c.AbortWithStatus(http.StatusNoContent)
+			return
 		}
 
 		c.Next()

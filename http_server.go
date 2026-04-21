@@ -1,11 +1,3 @@
-/**
- * @Author: lidonglin
- * @Description:
- * @File:  http_server.go
- * @Version: 1.0.0
- * @Date: 2023/11/15 11:46
- */
-
 package tserver
 
 import (
@@ -16,11 +8,18 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/choveylee/tlog"
 	"github.com/gin-gonic/gin"
 )
 
+// defaultShutdownTimeout bounds how long [http.Server.Shutdown] waits for active connections
+// to finish after a stop signal or parent context cancellation.
+const defaultShutdownTimeout = 30 * time.Second
+
+// SetHttpServerMode configures Gin's global mode: [gin.DebugMode] enables debug output;
+// any other value selects release mode via [gin.ReleaseMode].
 func SetHttpServerMode(runMode string) {
 	if runMode == gin.DebugMode {
 		gin.SetMode(gin.DebugMode)
@@ -29,6 +28,9 @@ func SetHttpServerMode(runMode string) {
 	}
 }
 
+// StartHttpServerTLS listens on the given TCP port with HTTPS using certFile and keyFile,
+// and runs until ctx is cancelled or SIGINT/SIGTERM is received. It performs a graceful
+// shutdown via [http.Server.Shutdown] with an upper time limit of [defaultShutdownTimeout].
 func StartHttpServerTLS(ctx context.Context, router *gin.Engine, httpPort int, certFile, keyFile string) {
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", httpPort),
@@ -37,6 +39,8 @@ func StartHttpServerTLS(ctx context.Context, router *gin.Engine, httpPort int, c
 
 	shutdownChan := make(chan os.Signal, 1)
 	signal.Notify(shutdownChan, syscall.SIGINT, syscall.SIGTERM)
+
+	defer signal.Stop(shutdownChan)
 
 	go func() {
 		err := server.ListenAndServeTLS(certFile, keyFile)
@@ -50,27 +54,15 @@ func StartHttpServerTLS(ctx context.Context, router *gin.Engine, httpPort int, c
 
 	select {
 	case <-ctx.Done():
-		err := server.Shutdown(ctx)
-		if err != nil {
-			tlog.E(ctx).Err(err).Msgf("shutdown http server err (%v).",
-				err)
-
-			return
-		}
-
-		return
+		shutdownHTTPServer(ctx, server)
 	case <-shutdownChan:
-		err := server.Shutdown(ctx)
-		if err != nil {
-			tlog.E(ctx).Err(err).Msgf("shutdown http server err (%v).",
-				err)
-
-			return
-		}
-		return
+		shutdownHTTPServer(ctx, server)
 	}
 }
 
+// StartHttpServer listens on the given TCP port over HTTP and runs until ctx is cancelled
+// or SIGINT/SIGTERM is received. It performs a graceful shutdown via [http.Server.Shutdown]
+// with an upper time limit of [defaultShutdownTimeout].
 func StartHttpServer(ctx context.Context, router *gin.Engine, httpPort int) {
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", httpPort),
@@ -79,6 +71,8 @@ func StartHttpServer(ctx context.Context, router *gin.Engine, httpPort int) {
 
 	shutdownChan := make(chan os.Signal, 1)
 	signal.Notify(shutdownChan, syscall.SIGINT, syscall.SIGTERM)
+
+	defer signal.Stop(shutdownChan)
 
 	go func() {
 		err := server.ListenAndServe()
@@ -92,23 +86,22 @@ func StartHttpServer(ctx context.Context, router *gin.Engine, httpPort int) {
 
 	select {
 	case <-ctx.Done():
-		err := server.Shutdown(ctx)
-		if err != nil {
-			tlog.E(ctx).Err(err).Msgf("shutdown http server err (%v).",
-				err)
-
-			return
-		}
-
-		return
+		shutdownHTTPServer(ctx, server)
 	case <-shutdownChan:
-		err := server.Shutdown(ctx)
-		if err != nil {
-			tlog.E(ctx).Err(err).Msgf("shutdown http server err (%v).",
-				err)
+		shutdownHTTPServer(ctx, server)
+	}
+}
 
-			return
-		}
-		return
+// shutdownHTTPServer calls [http.Server.Shutdown] with a fresh context limited by
+// [defaultShutdownTimeout]. A separate context is required because the caller's ctx may
+// already be cancelled when stopping, which would otherwise cause Shutdown to return
+// immediately without draining connections.
+func shutdownHTTPServer(logCtx context.Context, srv *http.Server) {
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), defaultShutdownTimeout)
+	defer cancel()
+
+	err := srv.Shutdown(shutdownCtx)
+	if err != nil {
+		tlog.E(logCtx).Err(err).Msg("shutdown http server err.")
 	}
 }

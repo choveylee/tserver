@@ -1,11 +1,3 @@
-/**
- * @Author: lidonglin
- * @Description:
- * @File:  http_router.go
- * @Version: 1.0.0
- * @Date: 2023/11/15 13:59
- */
-
 package tserver
 
 import (
@@ -17,6 +9,9 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 )
 
+// NewRouter returns a Gin [gin.Engine] configured with panic recovery, OpenTelemetry HTTP
+// instrumentation for serviceName, structured access logging (discarded by default), request
+// latency metrics, request-body reuse middleware, and a /healthz probe.
 func NewRouter(serviceName string) *gin.Engine {
 	router := gin.New()
 

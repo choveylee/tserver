@@ -1,11 +1,3 @@
-/**
- * @Author: lidonglin
- * @Description:
- * @File:  http_metric.go
- * @Version: 1.0.0
- * @Date: 2023/11/15 14:02
- */
-
 package tserver
 
 import (
@@ -20,6 +12,10 @@ import (
 
 var httpServerLatency *tmetric.HistogramVec
 
+// routeLabelUnknown is used when no Gin route template applies (e.g. 404 or unregistered path).
+// Raw URL paths must not be used as label values: each distinct path would create a new time series.
+const routeLabelUnknown = "unknown"
+
 func init() {
 	var err error
 	httpServerLatency, err = tmetric.NewHistogramVec(
@@ -32,8 +28,16 @@ func init() {
 	}
 }
 
+// ginMetric returns middleware that observes request duration into httpServerLatency after the
+// handler chain completes, using the registered route template when available.
 func ginMetric() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if httpServerLatency == nil {
+			c.Next()
+
+			return
+		}
+
 		startTime := time.Now()
 
 		c.Next()
@@ -41,11 +45,13 @@ func ginMetric() gin.HandlerFunc {
 		method := c.Request.Method
 		status := c.Writer.Status()
 
-		path := c.FullPath()
-		if path == "" {
-			path = c.Request.URL.Path
+		// Use the registered route pattern only (e.g. /users/:id). Never label with URL.Path:
+		// unbounded paths (/v1/items/1, /v1/items/2, …) explode Prometheus cardinality.
+		route := c.FullPath()
+		if route == "" {
+			route = routeLabelUnknown
 		}
 
-		httpServerLatency.Observe(tmetric.SinceMS(startTime), method, path, strconv.Itoa(status))
+		httpServerLatency.Observe(tmetric.SinceMS(startTime), method, route, strconv.Itoa(status))
 	}
 }

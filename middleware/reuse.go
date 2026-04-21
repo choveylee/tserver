@@ -1,11 +1,3 @@
-/**
- * @Author: lidonglin
- * @Description:
- * @File:  reuse.go
- * @Version: 1.0.0
- * @Date: 2024/02/28 15:46
- */
-
 package tmiddleware
 
 import (
@@ -15,6 +7,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// ReuseMiddleware buffers the request body while the handler chain runs, then restores the body
+// so later stages (or subsequent reads) can consume the same payload.
 func ReuseMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		buf := bytes.Buffer{}

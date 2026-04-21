@@ -1,11 +1,3 @@
-/**
- * @Author: lidonglin
- * @Description:
- * @File:  log
- * @Version: 1.0.0
- * @Date: 2023/11/15 14:19
- */
-
 package tserver
 
 import (
@@ -16,6 +8,13 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// maxLogLen caps how much of the request body is read for error access logs to limit
+// memory use and log volume. One extra byte is read to detect truncation.
+const maxLogLen = 1024
+
+// logFormatter implements [gin.LoggerConfig.Formatter]: it emits a structured access log via tlog
+// with method, latency, status, path, client IP, and optional query, error, and body details.
+// On client-error responses, request body is logged up to [maxLogLen], with a suffix if truncated.
 func logFormatter(param gin.LogFormatterParams) string {
 	event := tlog.D(param.Request.Context()).
 		Detailf("method:%s", param.Method).
@@ -36,13 +35,30 @@ func logFormatter(param gin.LogFormatterParams) string {
 	if (param.Method == http.MethodPost || param.Method == http.MethodPut ||
 		param.Method == http.MethodPatch || param.Method == http.MethodDelete) &&
 		param.StatusCode >= http.StatusBadRequest {
-		body, _ := io.ReadAll(param.Request.Body)
+		limited := io.LimitReader(param.Request.Body, maxLogLen+1)
 
-		if len(body) == 0 {
-			body = []byte("empty")
+		body, err := io.ReadAll(limited)
+		if err != nil {
+			event.Detailf("body_read_error:%v", err)
+		} else {
+			truncated := len(body) > maxLogLen
+
+			if truncated {
+				body = body[:maxLogLen]
+			}
+
+			if len(body) == 0 {
+				body = []byte("empty")
+			}
+
+			strBody := string(body)
+
+			if truncated {
+				strBody += "...(truncated)"
+			}
+
+			event.Detailf("body:%s", strBody)
 		}
-
-		event.Detailf("body:%s", string(body))
 	}
 
 	event.Msg("http access log.")
