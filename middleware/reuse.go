@@ -11,9 +11,9 @@ import (
 const defaultReuseBodyLimit int64 = 1 << 20
 
 // ReuseMiddleware snapshots request bodies up to [defaultReuseBodyLimit] bytes before the
-// handler chain runs. Small bodies can then be read again later in the chain after a full
-// read to EOF, while larger bodies stay streamable for the handler chain and still leave a
-// bounded snapshot available for post-handler consumers such as access logging.
+// handler chain runs. Bodies within the limit can be read again later in the chain after
+// they have been fully consumed, while larger bodies remain streamable and still leave a
+// bounded snapshot available to post-handler consumers such as access logging.
 func ReuseMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if c.Request == nil || c.Request.Body == nil || c.Request.Body == http.NoBody {

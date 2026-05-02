@@ -16,8 +16,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// defaultShutdownTimeout bounds how long [http.Server.Shutdown] waits for active connections
-// to finish after a stop signal or parent context cancellation.
+// defaultShutdownTimeout defines the maximum duration allowed for graceful shutdown after a
+// stop signal or parent-context cancellation.
 const defaultShutdownTimeout = 30 * time.Second
 
 const (
@@ -27,8 +27,8 @@ const (
 	defaultIdleTimeout       = 120 * time.Second
 )
 
-// HttpServerOption customizes the [http.Server] created by
-// [StartHttpServer] and [StartHttpServerTLS].
+// HttpServerOption customizes the [http.Server] instances created by [StartHttpServer] and
+// [StartHttpServerTLS].
 type HttpServerOption interface {
 	applyOption(*http.Server)
 }
@@ -39,40 +39,40 @@ func (option httpServerOption) applyOption(server *http.Server) {
 	option(server)
 }
 
-// WithReadHeaderTimeout overrides [http.Server.ReadHeaderTimeout]. Passing zero or a
-// negative duration disables the timeout, matching net/http semantics.
+// WithReadHeaderTimeout configures [http.Server.ReadHeaderTimeout]. Passing zero or a
+// negative duration disables the timeout, consistent with net/http semantics.
 func WithReadHeaderTimeout(timeout time.Duration) HttpServerOption {
 	return httpServerOption(func(server *http.Server) {
 		server.ReadHeaderTimeout = timeout
 	})
 }
 
-// WithReadTimeout overrides [http.Server.ReadTimeout]. Passing zero or a negative
-// duration disables the timeout, matching net/http semantics.
+// WithReadTimeout configures [http.Server.ReadTimeout]. Passing zero or a negative
+// duration disables the timeout, consistent with net/http semantics.
 func WithReadTimeout(timeout time.Duration) HttpServerOption {
 	return httpServerOption(func(server *http.Server) {
 		server.ReadTimeout = timeout
 	})
 }
 
-// WithWriteTimeout overrides [http.Server.WriteTimeout]. Passing zero or a negative
-// duration disables the timeout, matching net/http semantics.
+// WithWriteTimeout configures [http.Server.WriteTimeout]. Passing zero or a negative
+// duration disables the timeout, consistent with net/http semantics.
 func WithWriteTimeout(timeout time.Duration) HttpServerOption {
 	return httpServerOption(func(server *http.Server) {
 		server.WriteTimeout = timeout
 	})
 }
 
-// WithIdleTimeout overrides [http.Server.IdleTimeout]. Passing zero or a negative
-// duration disables the timeout, matching net/http semantics.
+// WithIdleTimeout configures [http.Server.IdleTimeout]. Passing zero or a negative
+// duration disables the timeout, consistent with net/http semantics.
 func WithIdleTimeout(timeout time.Duration) HttpServerOption {
 	return httpServerOption(func(server *http.Server) {
 		server.IdleTimeout = timeout
 	})
 }
 
-// SetHttpServerMode configures Gin's global mode: [gin.DebugMode] enables debug output;
-// any other value selects release mode via [gin.ReleaseMode].
+// SetHttpServerMode sets Gin's global execution mode. [gin.DebugMode] enables debug
+// behavior; any other value selects [gin.ReleaseMode].
 func SetHttpServerMode(runMode string) {
 	if runMode == gin.DebugMode {
 		gin.SetMode(gin.DebugMode)
@@ -81,13 +81,13 @@ func SetHttpServerMode(runMode string) {
 	}
 }
 
-// StartHttpServerTLS listens on the given TCP port with HTTPS using certFile and keyFile,
-// and runs until ctx is cancelled or SIGINT/SIGTERM is received. It returns any startup or
-// serve error to the caller after logging it, and performs a graceful shutdown via
+// StartHttpServerTLS serves HTTPS on the specified TCP port using certFile and keyFile
+// until ctx is cancelled or SIGINT/SIGTERM is received. It returns any startup or serve
+// error to the caller after logging it, and performs graceful shutdown through
 // [http.Server.Shutdown] with an upper time limit of [defaultShutdownTimeout].
 //
-// Optional [HttpServerOption] values can override the default [http.Server] timeouts for
-// cases such as SSE, long polling, or large transfers.
+// Optional [HttpServerOption] values may override the default [http.Server] timeouts for
+// use cases such as server-sent events (SSE), long polling, or large transfers.
 func StartHttpServerTLS(ctx context.Context, router *gin.Engine, httpPort int, certFile, keyFile string, options ...HttpServerOption) error {
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", httpPort),
@@ -124,13 +124,13 @@ func StartHttpServerTLS(ctx context.Context, router *gin.Engine, httpPort int, c
 	})
 }
 
-// StartHttpServer listens on the given TCP port over HTTP and runs until ctx is cancelled
-// or SIGINT/SIGTERM is received. It returns any startup or serve error to the caller after
-// logging it, and performs a graceful shutdown via [http.Server.Shutdown] with an upper
+// StartHttpServer serves HTTP on the specified TCP port until ctx is cancelled or
+// SIGINT/SIGTERM is received. It returns any startup or serve error to the caller after
+// logging it, and performs graceful shutdown through [http.Server.Shutdown] with an upper
 // time limit of [defaultShutdownTimeout].
 //
-// Optional [HttpServerOption] values can override the default [http.Server] timeouts for
-// cases such as SSE, long polling, or large transfers.
+// Optional [HttpServerOption] values may override the default [http.Server] timeouts for
+// use cases such as server-sent events (SSE), long polling, or large transfers.
 func StartHttpServer(ctx context.Context, router *gin.Engine, httpPort int, options ...HttpServerOption) error {
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", httpPort),
@@ -159,16 +159,16 @@ func StartHttpServer(ctx context.Context, router *gin.Engine, httpPort int, opti
 }
 
 // shutdownHTTPServer calls [http.Server.Shutdown] with a fresh context limited by
-// [defaultShutdownTimeout]. A separate context is required because the caller's ctx may
-// already be cancelled when stopping, which would otherwise cause Shutdown to return
-// immediately without draining connections.
+// [defaultShutdownTimeout]. A separate context is required because the caller's context
+// may already be cancelled when shutdown begins, which would otherwise cause Shutdown to
+// return immediately without draining active connections.
 func shutdownHTTPServer(logCtx context.Context, srv *http.Server) error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), defaultShutdownTimeout)
 	defer cancel()
 
 	err := srv.Shutdown(shutdownCtx)
 	if err != nil {
-		tlog.E(logCtx).Err(err).Msg("shutdown http server err.")
+		tlog.E(logCtx).Err(err).Msg("HTTP server shutdown failed")
 	}
 
 	return err
@@ -195,12 +195,12 @@ func serveHTTPServer(ctx context.Context, server *http.Server, listener net.List
 		serveErrChan <- nil
 	}()
 
-	tlog.I(ctx).Msgf("http server started, listen on %d.", httpPort)
+	tlog.I(ctx).Msgf("HTTP server started on port %d", httpPort)
 
 	select {
 	case err := <-serveErrChan:
 		if err != nil {
-			tlog.F(ctx).Err(err).Msgf("start http server (%d) err (%v).", httpPort, err)
+			tlog.F(ctx).Err(err).Msgf("HTTP server returned an unexpected error on port %d", httpPort)
 		}
 
 		return err

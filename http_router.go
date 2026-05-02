@@ -9,9 +9,9 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 )
 
-// NewRouter returns a Gin [gin.Engine] configured with panic recovery, OpenTelemetry HTTP
-// instrumentation for serviceName, structured access logging (discarded by default), request
-// latency metrics, request-body reuse middleware, and a /healthz probe.
+// NewRouter returns a [gin.Engine] preconfigured with panic recovery, OpenTelemetry HTTP
+// instrumentation for serviceName, structured access logging (discarded by default),
+// request-latency metrics, request-body reuse middleware, and a /healthz probe.
 func NewRouter(serviceName string) *gin.Engine {
 	router := gin.New()
 
@@ -24,7 +24,7 @@ func NewRouter(serviceName string) *gin.Engine {
 	router.Use(ginMetric())
 	router.Use(tmiddleware.ReuseMiddleware())
 
-	// health check
+	// Health check endpoint.
 	router.GET("/healthz", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"code": 0,

@@ -6,8 +6,9 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// CorsMiddleware returns middleware that sets broad CORS response headers, allows common methods,
-// and responds to OPTIONS requests with 204 No Content without invoking subsequent handlers.
+// CorsMiddleware returns Gin middleware that applies permissive CORS response headers,
+// allows common HTTP methods, and responds to OPTIONS requests with 204 No Content
+// without invoking subsequent handlers.
 func CorsMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Header("Access-Control-Allow-Origin", "*")

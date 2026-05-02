@@ -9,8 +9,9 @@ import (
 	"github.com/choveylee/tlimiter"
 )
 
-// LimiterConfig holds rate-limiter behavior for [LimiterMiddleware]: the underlying limiter,
-// error and limit-exceeded handlers, key extraction, and optional key exclusion.
+// LimiterConfig defines the behavior of [LimiterMiddleware], including the underlying
+// limiter, error handling, limit-exceeded handling, key extraction, and optional key
+// exclusion.
 type LimiterConfig struct {
 	Limiter *tlimiter.Limiter
 
@@ -22,8 +23,9 @@ type LimiterConfig struct {
 	ExcludedKey func(string) bool
 }
 
-// Handle applies the configured rate limit for a single request: it may abort the chain on
-// errors, when the limit is reached, or continue to the next handler when allowed.
+// Handle applies the configured rate limit to a single request. It may abort the handler
+// chain on limiter errors or when the limit has been exceeded, or continue when the
+// request is allowed.
 func (config *LimiterConfig) Handle(c *gin.Context) {
 	key := config.KeyGetter(c)
 
@@ -57,7 +59,8 @@ func (config *LimiterConfig) Handle(c *gin.Context) {
 	c.Next()
 }
 
-// LimiterConfigOptionInterface is implemented by functional options for [LimiterMiddleware].
+// LimiterConfigOptionInterface is implemented by functional options for
+// [LimiterMiddleware].
 type LimiterConfigOptionInterface interface {
 	apply(*LimiterConfig)
 }
@@ -69,17 +72,18 @@ func (option LimiterConfigOption) apply(config *LimiterConfig) {
 	option(config)
 }
 
-// ErrorHandler is invoked when the limiter returns a non-nil error while resolving the key context.
+// ErrorHandler handles errors returned by the limiter while resolving state for the
+// current request key.
 type ErrorHandler func(c *gin.Context, err error)
 
-// WithErrorHandler will configure the Middleware to use the given ErrorHandler.
+// WithErrorHandler configures [LimiterMiddleware] to use the provided [ErrorHandler].
 func WithErrorHandler(handler ErrorHandler) LimiterConfigOptionInterface {
 	return LimiterConfigOption(func(config *LimiterConfig) {
 		config.ErrorHandler = handler
 	})
 }
 
-// DefaultErrorHandler is the default ErrorHandler used by a new Middleware.
+// DefaultErrorHandler is the default [ErrorHandler] used by [LimiterMiddleware].
 func DefaultErrorHandler(c *gin.Context, err error) {
 	panic(err)
 }
@@ -87,44 +91,47 @@ func DefaultErrorHandler(c *gin.Context, err error) {
 // LimitReachedHandler is invoked when the rate limit for the current key has been exceeded.
 type LimitReachedHandler func(c *gin.Context)
 
-// WithLimitReachedHandler will configure the Middleware to use the given LimitReachedHandler.
+// WithLimitReachedHandler configures [LimiterMiddleware] to use the provided
+// [LimitReachedHandler].
 func WithLimitReachedHandler(handler LimitReachedHandler) LimiterConfigOptionInterface {
 	return LimiterConfigOption(func(config *LimiterConfig) {
 		config.LimitReachedHandler = handler
 	})
 }
 
-// DefaultLimitReachedHandler is the default LimitReachedHandler used by a new Middleware.
+// DefaultLimitReachedHandler is the default [LimitReachedHandler] used by
+// [LimiterMiddleware].
 func DefaultLimitReachedHandler(c *gin.Context) {
 	c.String(http.StatusTooManyRequests, "limit exceeded")
 }
 
-// KeyGetter will define the rate limiter key given the gin Context.
+// KeyGetter derives the rate-limit key from the current Gin context.
 type KeyGetter func(c *gin.Context) string
 
-// WithKeyGetter will configure the Middleware to use the given KeyGetter.
+// WithKeyGetter configures [LimiterMiddleware] to use the provided [KeyGetter].
 func WithKeyGetter(handler KeyGetter) LimiterConfigOptionInterface {
 	return LimiterConfigOption(func(config *LimiterConfig) {
 		config.KeyGetter = handler
 	})
 }
 
-// DefaultKeyGetter is the default KeyGetter used by a new Middleware.
-// It returns the Client IP address.
+// DefaultKeyGetter is the default [KeyGetter] used by [LimiterMiddleware]. It returns
+// the client IP address.
 func DefaultKeyGetter(c *gin.Context) string {
 	return c.ClientIP()
 }
 
-// WithExcludedKey will configure the Middleware to ignore key(s) using the given function.
+// WithExcludedKey configures [LimiterMiddleware] to skip rate limiting for keys for which
+// the provided predicate returns true.
 func WithExcludedKey(handler func(string) bool) LimiterConfigOptionInterface {
 	return LimiterConfigOption(func(config *LimiterConfig) {
 		config.ExcludedKey = handler
 	})
 }
 
-// LimiterMiddleware returns Gin middleware that enforces rate limits using limiter, with
-// optional configuration via [WithErrorHandler], [WithLimitReachedHandler], [WithKeyGetter],
-// and [WithExcludedKey].
+// LimiterMiddleware returns Gin middleware that enforces rate limits using limiter.
+// Additional behavior may be customized with [WithErrorHandler],
+// [WithLimitReachedHandler], [WithKeyGetter], and [WithExcludedKey].
 func LimiterMiddleware(limiter *tlimiter.Limiter, options ...LimiterConfigOptionInterface) gin.HandlerFunc {
 	limiterConfig := &LimiterConfig{
 		Limiter: limiter,

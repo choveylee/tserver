@@ -8,13 +8,14 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// maxLogLen caps how much of the request body is read for error access logs to limit
-// memory use and log volume. One extra byte is read to detect truncation.
+// maxLogLen limits how much of the request body is read for error access logs in order to
+// bound memory usage and log volume. One additional byte is read to detect truncation.
 const maxLogLen = 1024
 
-// logFormatter implements [gin.LoggerConfig.Formatter]: it emits a structured access log via tlog
-// with method, latency, status, path, client IP, and optional query, error, and body details.
-// On client-error responses, request body is logged up to [maxLogLen], with a suffix if truncated.
+// logFormatter implements [gin.LoggerConfig.Formatter]. It emits a structured access log
+// through tlog with method, latency, status, path, client IP, and optional query, error,
+// and body details. For mutating requests that return status codes of 400 or higher, the
+// request body is logged up to [maxLogLen] bytes, with a suffix when truncation occurs.
 func logFormatter(param gin.LogFormatterParams) string {
 	event := tlog.D(param.Request.Context()).
 		Detailf("method:%s", param.Method).
@@ -61,7 +62,7 @@ func logFormatter(param gin.LogFormatterParams) string {
 		}
 	}
 
-	event.Msg("http access log.")
+	event.Msg("HTTP access log entry")
 
 	return ""
 }
