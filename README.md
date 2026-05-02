@@ -46,11 +46,27 @@ func main() {
 	defer cancel()
 
 	// Run server (blocks). Stop via cancel(ctx) or SIGINT/SIGTERM.
-	tserver.StartHttpServer(ctx, router, 8080)
+	if err := tserver.StartHttpServer(ctx, router, 8080); err != nil {
+		panic(err)
+	}
 }
 ```
 
 For TLS, use `StartHttpServerTLS` with certificate and key file paths instead of `StartHttpServer`.
+
+If you need SSE, long polling, slow uploads, or large downloads, pass timeout options to `StartHttpServer` or `StartHttpServerTLS`:
+
+```go
+if err := tserver.StartHttpServer(
+	ctx,
+	router,
+	8080,
+	tserver.WithReadTimeout(0),
+	tserver.WithWriteTimeout(0),
+); err != nil {
+	panic(err)
+}
+```
 
 ### Subpackage `middleware`
 
@@ -71,8 +87,8 @@ r.Use(tmiddleware.CorsMiddleware())
 |--------|-------------|
 | `SetHttpServerMode` | Sets Gin’s global mode (`DebugMode` vs `ReleaseMode`). |
 | `NewRouter(serviceName string)` | Returns a configured `*gin.Engine` with observability middleware and `/healthz`. |
-| `StartHttpServer` | Serves HTTP on `:{port}` until stop. |
-| `StartHttpServerTLS` | Same as above over HTTPS with the given cert and key files. |
+| `StartHttpServer` | Serves HTTP on `:{port}` until stop, returns startup/shutdown errors, and accepts optional timeout overrides. |
+| `StartHttpServerTLS` | Same as above over HTTPS with the given cert and key files, with the same optional timeout overrides. |
 
 Refer to [pkg.go.dev](https://pkg.go.dev/github.com/choveylee/tserver) for complete documentation.
 
