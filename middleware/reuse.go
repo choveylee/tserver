@@ -18,19 +18,44 @@ func ReuseMiddleware() gin.HandlerFunc {
 	return func(ginContext *gin.Context) {
 		request := ginContext.Request
 		if request != nil && request.Body != nil && request.Body != http.NoBody && request.ContentLength <= defaultReuseBodyLimit {
-			body := &capturingBody{ReadCloser: request.Body, request: request}
+			replay := &bodyReplay{request: request, ginContext: ginContext}
+			body := &capturingBody{ReadCloser: request.Body, replay: replay}
 
 			request.Body = body
+			defer func() {
+				replay.request = ginContext.Request
+				replay.ginContext = nil
+			}()
 		}
 
 		ginContext.Next()
 	}
 }
 
+type bodyReplay struct {
+	request    *http.Request
+	ginContext *gin.Context
+}
+
+// reset installs a fresh reader on the active request. Middleware can replace
+// the request via WithContext or Clone while keeping the same body.
+func (replay *bodyReplay) reset(current io.ReadCloser, snapshot []byte, release func() error) {
+	request := replay.request
+	if replay.ginContext != nil {
+		request = replay.ginContext.Request
+	}
+
+	if request != nil && request.Body == current {
+		body := &reusableBody{replay: replay, data: snapshot, reader: bytes.NewReader(snapshot), release: release}
+
+		request.Body = body
+	}
+}
+
 type capturingBody struct {
 	io.ReadCloser
 
-	request      *http.Request
+	replay       *bodyReplay
 	snapshot     []byte
 	snapshotLost bool
 	closeOnce    sync.Once
@@ -53,8 +78,8 @@ func (body *capturingBody) Read(destination []byte) (int, error) {
 	}
 
 	body.snapshot = append(body.snapshot, destination[:count]...)
-	if err == io.EOF && body.request.Body == body {
-		body.request.Body = newReusableBody(body.request, body.snapshot, body.Close)
+	if err == io.EOF {
+		body.replay.reset(body, body.snapshot, body.Close)
 		body.snapshotLost = true
 		body.snapshot = nil
 	}
@@ -70,17 +95,11 @@ func (body *capturingBody) Close() error {
 }
 
 type reusableBody struct {
-	request *http.Request
+	replay  *bodyReplay
 	data    []byte
 	reader  *bytes.Reader
 	closed  atomic.Bool
 	release func() error
-}
-
-func newReusableBody(request *http.Request, data []byte, release func() error) *reusableBody {
-	body := &reusableBody{request: request, data: data, reader: bytes.NewReader(data), release: release}
-
-	return body
 }
 
 // Read installs another reader only when the replay has been fully consumed.
@@ -90,8 +109,8 @@ func (body *reusableBody) Read(destination []byte) (int, error) {
 	}
 
 	count, err := body.reader.Read(destination)
-	if err == io.EOF && body.request.Body == body {
-		body.request.Body = newReusableBody(body.request, body.data, body.release)
+	if err == io.EOF {
+		body.replay.reset(body, body.data, body.release)
 	}
 
 	return count, err

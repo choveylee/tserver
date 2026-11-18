@@ -2,6 +2,7 @@ package tserver
 
 import (
 	"errors"
+	"net"
 	"net/http"
 	"net/url"
 
@@ -23,10 +24,16 @@ func prepareHTTPTrace(ginContext *gin.Context) {
 	telemetry := new(http.Request)
 	*telemetry = *request
 	telemetry.Method = httpMethodLabel(request.Method)
+	// otelgin uses Host for server.address and server.port. The local address
+	// keeps those dimensions independent of client-supplied header values.
+	telemetry.Host = ""
+	if address, ok := request.Context().Value(http.LocalAddrContextKey).(net.Addr); ok {
+		telemetry.Host = address.String()
+	}
+
 	traceURL := &url.URL{
-		Scheme: request.URL.Scheme,
-		Host:   request.URL.Host,
-		Path:   httpRouteLabel(ginContext),
+		Host: telemetry.Host,
+		Path: httpRouteLabel(ginContext),
 	}
 
 	telemetry.URL = traceURL

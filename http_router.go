@@ -22,7 +22,7 @@ func NewRouter(serviceName string) *gin.Engine {
 		serveTracedRequest,
 		logHTTPAccess,
 		ginMetric(),
-		gin.CustomRecoveryWithWriter(nil, recoverHTTP),
+		httpRecovery,
 		tmiddleware.ReuseMiddleware(),
 	)
 

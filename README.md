@@ -22,7 +22,8 @@ context cancellation or operating-system signals (`SIGINT`, `SIGTERM`).
   routes use `unknown` to avoid high Prometheus cardinality), and `http_status`.
 - **Access logs** - Structured method, route, status, client IP, response size
   and timing through tlog. Requests that panic before writing a response are
-  recorded with status 500.
+  recorded with status 500. A panic after the response headers are committed
+  aborts the connection or HTTP/2 stream and marks the trace as an error.
 
 ## Requirements
 
@@ -115,15 +116,18 @@ without masking. `WithExcludedKey` receives the final key, including the subnet
 mask when the default getter is used. Calling `DefaultKeyGetter` directly
 continues to return Gin's raw client IP.
 
-The default limiter error handler returns HTTP 500 if the limiter or store is
-unavailable. A custom error handler can supply a different response.
+The limiter stops the route before invoking a rejection callback. Its default
+status is 500 when the limiter or store is unavailable and 429 when the quota
+is exhausted. A custom callback can override the status before writing.
 When creating a go-redis client for `tlimiter.NewRedisStore`, set
 `ContextTimeoutEnabled: true` so request deadlines reach Redis socket I/O.
 
 `CorsMiddleware` answers browser preflights with 204. Plain `OPTIONS` requests
 can reach the application's handlers. `ReuseMiddleware` captures bytes as the
 handler reads. Complete bodies of up to 1 MiB can be read again after EOF.
-Oversized bodies continue streaming and failed reads retain their error.
+Replay follows the active request if middleware copies it with `WithContext`
+or `Clone`. Oversized bodies continue streaming and failed reads retain their
+error.
 
 ## API overview
 
@@ -141,7 +145,9 @@ Refer to [pkg.go.dev](https://pkg.go.dev/github.com/choveylee/tserver) for compl
 - **Tracing** - `otelgin` receives the service name and route-level request
   metadata. Raw paths, query strings, user agents and handler error text are
   omitted from its built-in trace fields. The request and Gin errors remain
-  available to application code.
+  available to application code. Server address and port come from the service
+  name and local listener address, so incoming `Host` values do not add metric
+  dimensions.
 - **Metrics** - Latency histograms are registered through
   [tmetric](https://github.com/choveylee/tmetric). Ensure your process exposes
   Prometheus scrape targets as required by your deployment.

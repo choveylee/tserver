@@ -38,8 +38,7 @@ func (config *LimiterConfig) Handle(ginContext *gin.Context) {
 	}
 	if config.Limiter == nil || config.Limiter.Store == nil {
 		err := errors.New("tserver: rate limiter and store must be configured")
-		errorHandler(ginContext, err)
-		ginContext.Abort()
+		rejectRateLimitError(ginContext, errorHandler, err)
 
 		return
 	}
@@ -60,9 +59,7 @@ func (config *LimiterConfig) Handle(ginContext *gin.Context) {
 	// Pass the HTTP request context so its cancellation and deadline reach the store.
 	state, err := config.Limiter.Get(ginContext.Request.Context(), key)
 	if err != nil {
-		errorHandler(ginContext, err)
-
-		ginContext.Abort()
+		rejectRateLimitError(ginContext, errorHandler, err)
 
 		return
 	}
@@ -76,14 +73,22 @@ func (config *LimiterConfig) Handle(ginContext *gin.Context) {
 		if handler == nil {
 			handler = DefaultLimitReachedHandler
 		}
-		handler(ginContext)
-
 		ginContext.Abort()
+		ginContext.Status(http.StatusTooManyRequests)
+		handler(ginContext)
 
 		return
 	}
 
 	ginContext.Next()
+}
+
+// rejectRateLimitError prevents custom response handlers from continuing the
+// route and stages a status they can override before committing their response.
+func rejectRateLimitError(ginContext *gin.Context, handler ErrorHandler, err error) {
+	ginContext.Abort()
+	ginContext.Status(http.StatusInternalServerError)
+	handler(ginContext, err)
 }
 
 // LimiterConfigOptionInterface is implemented by functional options for
@@ -101,8 +106,8 @@ func (option LimiterConfigOption) apply(config *LimiterConfig) {
 	}
 }
 
-// ErrorHandler handles errors returned by the limiter while resolving state for the
-// current request key.
+// ErrorHandler writes the response to a limiter error after the route is aborted.
+// The staged status is 500 and may be overridden before writing a response.
 type ErrorHandler func(ginContext *gin.Context, err error)
 
 // WithErrorHandler configures [LimiterMiddleware] to use the provided [ErrorHandler].
@@ -120,7 +125,8 @@ func DefaultErrorHandler(ginContext *gin.Context, err error) {
 	ginContext.AbortWithStatus(http.StatusInternalServerError)
 }
 
-// LimitReachedHandler is invoked when the rate limit for the current key has been exceeded.
+// LimitReachedHandler writes the response to a rejected request after the route
+// is aborted. The staged status is 429 and may be overridden before writing.
 type LimitReachedHandler func(ginContext *gin.Context)
 
 // WithLimitReachedHandler configures [LimiterMiddleware] to use the provided
