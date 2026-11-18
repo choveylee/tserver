@@ -2,6 +2,7 @@ package tserver
 
 import (
 	"context"
+	"net/http"
 	"strconv"
 	"time"
 
@@ -21,7 +22,7 @@ func init() {
 	var err error
 	httpServerLatency, err = tmetric.NewHistogramVec(
 		"http_server_request_latency",
-		"end-to-end latency",
+		"HTTP handler duration in milliseconds",
 		[]string{"http_method", "http_server_route", "http_status"},
 	)
 	if err != nil {
@@ -32,27 +33,35 @@ func init() {
 // ginMetric returns middleware that records request latency in httpServerLatency after the
 // handler chain completes, using the registered route template when available.
 func ginMetric() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		if httpServerLatency == nil {
-			c.Next()
-
-			return
-		}
-
+	return func(ginContext *gin.Context) {
 		startTime := time.Now()
+		ginContext.Next()
 
-		c.Next()
-
-		method := c.Request.Method
-		status := c.Writer.Status()
-
-		// Use the registered route pattern only (e.g. /users/:id). Never label with URL.Path:
-		// unbounded paths (/v1/items/1, /v1/items/2, ...) explode Prometheus cardinality.
-		route := c.FullPath()
-		if route == "" {
-			route = routeLabelUnknown
+		if httpServerLatency != nil {
+			method := httpMethodLabel(ginContext.Request.Method)
+			route := httpRouteLabel(ginContext)
+			status := strconv.Itoa(ginContext.Writer.Status())
+			_ = httpServerLatency.Observe(tmetric.SinceMS(startTime), method, route, status)
 		}
-
-		httpServerLatency.Observe(tmetric.SinceMS(startTime), method, route, strconv.Itoa(status))
 	}
+}
+
+// httpRouteLabel keeps unmatched paths out of logs, metrics and traces.
+func httpRouteLabel(ginContext *gin.Context) string {
+	if route := ginContext.FullPath(); route != "" {
+		return route
+	}
+
+	return routeLabelUnknown
+}
+
+// httpMethodLabel bounds telemetry cardinality for arbitrary HTTP methods.
+func httpMethodLabel(method string) string {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodPatch,
+		http.MethodDelete, http.MethodConnect, http.MethodOptions, http.MethodTrace:
+		return method
+	}
+
+	return "_OTHER"
 }

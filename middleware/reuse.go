@@ -4,116 +4,101 @@ import (
 	"bytes"
 	"io"
 	"net/http"
+	"sync"
+	"sync/atomic"
 
 	"github.com/gin-gonic/gin"
 )
 
-const defaultReuseBodyLimit int64 = 1 << 20
+const defaultReuseBodyLimit = 1 << 20
 
-// ReuseMiddleware snapshots request bodies up to [defaultReuseBodyLimit] bytes before the
-// handler chain runs. Bodies within the limit can be read again later in the chain after
-// they have been fully consumed, while larger bodies remain streamable and still leave a
-// bounded snapshot available to post-handler consumers such as access logging.
+// ReuseMiddleware captures up to 1 MiB as the handler reads. A complete body
+// within the limit can be read again once the reader reaches EOF.
 func ReuseMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		if c.Request == nil || c.Request.Body == nil || c.Request.Body == http.NoBody {
-			c.Next()
+	return func(ginContext *gin.Context) {
+		request := ginContext.Request
+		if request != nil && request.Body != nil && request.Body != http.NoBody && request.ContentLength <= defaultReuseBodyLimit {
+			body := &capturingBody{ReadCloser: request.Body, request: request}
 
-			return
+			request.Body = body
 		}
 
-		snapshot, err := io.ReadAll(io.LimitReader(c.Request.Body, defaultReuseBodyLimit+1))
-		if err != nil {
-			c.Error(err)
-			c.Request.Body = newPrefixThenErrorBody(snapshot, err)
-
-			c.Next()
-
-			c.Request.Body = newReusableBody(c.Request, snapshot)
-
-			return
-		}
-
-		if len(snapshot) <= int(defaultReuseBodyLimit) {
-			c.Request.Body = newReusableBody(c.Request, snapshot)
-
-			c.Next()
-
-			c.Request.Body = newReusableBody(c.Request, snapshot)
-
-			return
-		}
-
-		c.Request.Body = io.NopCloser(io.MultiReader(bytes.NewReader(snapshot), c.Request.Body))
-
-		c.Next()
-
-		c.Request.Body = newReusableBody(c.Request, snapshot)
+		ginContext.Next()
 	}
+}
+
+type capturingBody struct {
+	io.ReadCloser
+
+	request      *http.Request
+	snapshot     []byte
+	snapshotLost bool
+	closeOnce    sync.Once
+	closeErr     error
+}
+
+// Read captures bytes only as the underlying body supplies them. A partial,
+// failed or oversized body must never look like a complete replay.
+func (body *capturingBody) Read(destination []byte) (int, error) {
+	count, err := body.ReadCloser.Read(destination)
+	if body.snapshotLost {
+		return count, err
+	}
+
+	if count > defaultReuseBodyLimit-len(body.snapshot) || (err != nil && err != io.EOF) {
+		body.snapshotLost = true
+		body.snapshot = nil
+
+		return count, err
+	}
+
+	body.snapshot = append(body.snapshot, destination[:count]...)
+	if err == io.EOF && body.request.Body == body {
+		body.request.Body = newReusableBody(body.request, body.snapshot, body.Close)
+		body.snapshotLost = true
+		body.snapshot = nil
+	}
+
+	return count, err
+}
+
+// Close releases the original body, including when a replay is closed instead.
+func (body *capturingBody) Close() error {
+	body.closeOnce.Do(func() { body.closeErr = body.ReadCloser.Close() })
+
+	return body.closeErr
 }
 
 type reusableBody struct {
 	request *http.Request
 	data    []byte
 	reader  *bytes.Reader
-	closed  bool
+	closed  atomic.Bool
+	release func() error
 }
 
-func newReusableBody(request *http.Request, data []byte) io.ReadCloser {
-	return &reusableBody{
-		request: request,
-		data:    data,
-		reader:  bytes.NewReader(data),
-	}
+func newReusableBody(request *http.Request, data []byte, release func() error) *reusableBody {
+	body := &reusableBody{request: request, data: data, reader: bytes.NewReader(data), release: release}
+
+	return body
 }
 
-func (body *reusableBody) Read(p []byte) (int, error) {
-	if body.closed {
+// Read installs another reader only when the replay has been fully consumed.
+func (body *reusableBody) Read(destination []byte) (int, error) {
+	if body.closed.Load() {
 		return 0, http.ErrBodyReadAfterClose
 	}
 
-	n, err := body.reader.Read(p)
-	if err == io.EOF && body.request != nil && body.request.Body == body {
-		body.request.Body = newReusableBody(body.request, body.data)
+	count, err := body.reader.Read(destination)
+	if err == io.EOF && body.request.Body == body {
+		body.request.Body = newReusableBody(body.request, body.data, body.release)
 	}
 
-	return n, err
+	return count, err
 }
 
 func (body *reusableBody) Close() error {
-	body.closed = true
+	body.closed.Store(true)
 
-	return nil
-}
-
-type prefixThenErrorBody struct {
-	reader *bytes.Reader
-	err    error
-	closed bool
-}
-
-func newPrefixThenErrorBody(prefix []byte, err error) io.ReadCloser {
-	return &prefixThenErrorBody{
-		reader: bytes.NewReader(prefix),
-		err:    err,
-	}
-}
-
-func (body *prefixThenErrorBody) Read(p []byte) (int, error) {
-	if body.closed {
-		return 0, http.ErrBodyReadAfterClose
-	}
-
-	n, err := body.reader.Read(p)
-	if err == io.EOF {
-		return n, body.err
-	}
-
-	return n, err
-}
-
-func (body *prefixThenErrorBody) Close() error {
-	body.closed = true
-
-	return nil
+	return body.release()
 }

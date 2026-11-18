@@ -1,7 +1,6 @@
 package tserver
 
 import (
-	"io"
 	"net/http"
 
 	"github.com/choveylee/tserver/middleware"
@@ -10,23 +9,26 @@ import (
 )
 
 // NewRouter returns a [gin.Engine] preconfigured with panic recovery, OpenTelemetry HTTP
-// instrumentation for serviceName, structured access logging (discarded by default),
-// request-latency metrics, request-body reuse middleware, and a /healthz probe.
+// instrumentation for serviceName, structured access logging, request-latency
+// metrics, request-body reuse and a /healthz probe. SetTrustedProxies can opt in
+// to specific reverse proxies for forwarded client IPs.
 func NewRouter(serviceName string) *gin.Engine {
 	router := gin.New()
+	_ = router.SetTrustedProxies(nil)
 
-	router.Use(gin.Recovery())
-	router.Use(otelgin.Middleware(serviceName))
-	router.Use(gin.LoggerWithConfig(gin.LoggerConfig{
-		Formatter: logFormatter,
-		Output:    io.Discard,
-	}))
-	router.Use(ginMetric())
-	router.Use(tmiddleware.ReuseMiddleware())
+	router.Use(
+		prepareHTTPTrace,
+		otelgin.Middleware(serviceName),
+		serveTracedRequest,
+		logHTTPAccess,
+		ginMetric(),
+		gin.CustomRecoveryWithWriter(nil, recoverHTTP),
+		tmiddleware.ReuseMiddleware(),
+	)
 
 	// Health check endpoint.
-	router.GET("/healthz", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
+	router.GET("/healthz", func(ginContext *gin.Context) {
+		ginContext.JSON(http.StatusOK, gin.H{
 			"code": 0,
 		})
 	})

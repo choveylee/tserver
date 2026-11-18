@@ -20,14 +20,13 @@ context cancellation or operating-system signals (`SIGINT`, `SIGTERM`).
 - **Metrics** - The `http_server_request_latency` histogram with labels
   `http_method`, `http_server_route` (using the Gin route template only; unmatched
   routes use `unknown` to avoid high Prometheus cardinality), and `http_status`.
-- **Access logs** - Structured log fields through tlog. For failed mutating
-  requests (`POST`, `PUT`, `PATCH`, `DELETE`) with status codes of 400 or
-  higher, the request body is logged up to **1 KiB**, with a truncation marker
-  when applicable.
+- **Access logs** - Structured method, route, status, client IP, response size
+  and timing through tlog. Requests that panic before writing a response are
+  recorded with status 500.
 
 ## Requirements
 
-- Go **1.25** or later (see `go.mod`).
+- Go **1.27.4** or later (see `go.mod`).
 
 ## Installation
 
@@ -103,6 +102,29 @@ r := gin.New()
 r.Use(tmiddleware.CorsMiddleware())
 ```
 
+`LimiterMiddleware` derives its default key from Gin's `ClientIP()` and applies
+the limiter's `IPv4Mask` or `IPv6Mask`. For example, an IPv4 `/24` mask groups
+`192.0.2.1` and `192.0.2.200` under `192.0.2.0`, so they share one quota.
+`NewRouter` trusts the socket peer by default. Behind a reverse proxy, use
+`router.SetTrustedProxies` with the proxy's IP addresses or CIDRs before serving.
+When mounting the limiter on a custom Gin engine, configure trusted proxies on
+that engine. The limiter's forwarded-header options apply to its own IP helpers.
+
+`WithKeyGetter` replaces the default key completely, so custom keys are used
+without masking. `WithExcludedKey` receives the final key, including the subnet
+mask when the default getter is used. Calling `DefaultKeyGetter` directly
+continues to return Gin's raw client IP.
+
+The default limiter error handler returns HTTP 500 if the limiter or store is
+unavailable. A custom error handler can supply a different response.
+When creating a go-redis client for `tlimiter.NewRedisStore`, set
+`ContextTimeoutEnabled: true` so request deadlines reach Redis socket I/O.
+
+`CorsMiddleware` answers browser preflights with 204. Plain `OPTIONS` requests
+can reach the application's handlers. `ReuseMiddleware` captures bytes as the
+handler reads. Complete bodies of up to 1 MiB can be read again after EOF.
+Oversized bodies continue streaming and failed reads retain their error.
+
 ## API overview
 
 | Symbol | Description |
@@ -116,21 +138,27 @@ Refer to [pkg.go.dev](https://pkg.go.dev/github.com/choveylee/tserver) for compl
 
 ## Observability
 
-- **Tracing** - The `serviceName` passed to `NewRouter` is supplied to the
-  OpenTelemetry Gin middleware (`otelgin`).
+- **Tracing** - `otelgin` receives the service name and route-level request
+  metadata. Raw paths, query strings, user agents and handler error text are
+  omitted from its built-in trace fields. The request and Gin errors remain
+  available to application code.
 - **Metrics** - Latency histograms are registered through
   [tmetric](https://github.com/choveylee/tmetric). Ensure your process exposes
   Prometheus scrape targets as required by your deployment.
-- **Logging** - Access logs use tlog. Gin's default writer output is discarded
-  in `NewRouter` because formatting is delegated to `logFormatter`.
+- **Logging** - Access and recovery logs omit request bodies, raw URL paths,
+  query strings, header values and panic values.
 
 ## Shutdown behavior
 
-Shutdown is triggered when the caller's context is cancelled **or** when
-`SIGINT` or `SIGTERM` is received. The library invokes
-`http.Server.Shutdown` with a **fresh** context limited to **30 seconds**, so
-in-flight requests can drain without relying on an already-cancelled parent
-context.
+Caller cancellation, SIGINT and SIGTERM start draining. The default deadline
+is 30 seconds and can be set with `WithGracefulShutdownTimeout`. Request
+contexts inherit caller values and remain active during the drain. At the
+deadline the server cancels those contexts, closes remaining HTTP connections
+and returns an error matching `context.DeadlineExceeded`.
+
+WebSockets and other hijacked connections are owned by their handlers and need
+application-managed shutdown. A handler must observe request cancellation to
+finish its own work after a forced close.
 
 ## Related modules
 
