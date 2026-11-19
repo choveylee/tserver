@@ -36,6 +36,7 @@ func (config *LimiterConfig) Handle(ginContext *gin.Context) {
 	if errorHandler == nil {
 		errorHandler = DefaultErrorHandler
 	}
+
 	if config.Limiter == nil || config.Limiter.Store == nil {
 		err := errors.New("tserver: rate limiter and store must be configured")
 		rejectRateLimitError(ginContext, errorHandler, err)
@@ -73,6 +74,7 @@ func (config *LimiterConfig) Handle(ginContext *gin.Context) {
 		if handler == nil {
 			handler = DefaultLimitReachedHandler
 		}
+
 		ginContext.Abort()
 		ginContext.Status(http.StatusTooManyRequests)
 		handler(ginContext)

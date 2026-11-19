@@ -199,6 +199,7 @@ func serveHTTPServer(ctx context.Context, config *httpServerConfig) error {
 	if err != nil {
 		return fmt.Errorf("tserver: listen on %s: %w", server.Addr, err)
 	}
+
 	defer listener.Close()
 
 	if err := stopCtx.Err(); err != nil {
@@ -225,6 +226,7 @@ func serveHTTPServer(ctx context.Context, config *httpServerConfig) error {
 		} else if err != nil {
 			err = fmt.Errorf("tserver: serve HTTP on %s: %w", listener.Addr(), err)
 		}
+
 		serveResult <- err
 	}()
 

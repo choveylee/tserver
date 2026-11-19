@@ -57,6 +57,7 @@ func httpRecovery(ginContext *gin.Context) {
 		for _, name := range []string{"Content-Length", "Content-Encoding", "Content-Type", "Content-Range", "Trailer", "Transfer-Encoding"} {
 			headerMap.Del(name)
 		}
+
 		ginContext.AbortWithStatus(http.StatusInternalServerError)
 	}()
 
